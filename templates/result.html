@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Content Analysis - Result</title>
+    <style>
+        .blind {
+            filter: blur(10px);
+            color: gray;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>분석 결과</h1>
+
+    <h2>텍스트 분석 결과:</h2>
+    <div class="{{ 'blind' if text_blind else '' }}">
+        {{ "비속어 포함됨" if text_blind else "비속어 없음" }}
+    </div>
+
+    <h2>이미지 분석 결과:</h2>
+    <div>
+        {% if image_blind %}
+            <img src="{{ url_for('static', filename='blurred_image.png') }}" class="blind" alt="Image is blurred for safety">
+            <p class="blind">이 이미지는 음란물로 판단되어 블라인드 처리되었습니다.</p>
+        {% else %}
+            <img src="{{ image_path }}" alt="Analyzed Image">
+        {% endif %}
+    </div>
+
+    <a href="/">돌아가기</a>
+</body>
+</html>
