@@ -1,0 +1,28 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    width: 80%;
+    margin: auto;
+}
+
+.articles-list {
+    margin-top: 20px;
+}
+
+.article, .comment, .file {
+    border: 1px solid #ddd;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.article h2 {
+    margin-top: 0;
+}
+
+.comment, .file {
+    margin-left: 20px;
+}

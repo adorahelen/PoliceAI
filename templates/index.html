@@ -3,19 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Content Analysis - Index</title>
+    <title>Articles, Comments & Files</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='articleStyles.css') }}">
 </head>
 <body>
-    <h1>클린 웹 프로젝트</h1>
-    <p>사이버성폭력 및 음란물 예방 서비스</p>
-    <form action="/analyze" method="post" enctype="multipart/form-data">
-        <label for="text">텍스트 입력:</label>
-        <input type="text" name="text" id="text" required>
-        <br><br>
-        <label for="image">이미지 업로드:</label>
-        <input type="file" name="image" id="image" accept="image/*" required>
-        <br><br>
-        <button type="submit">분석하기</button>
-    </form>
+    <div class="container">
+        <h1>Articles</h1>
+        <div id="articles-list" class="articles-list"></div>
+    </div>
+    <script src="{{ url_for('static', filename='articleScripts.js') }}"></script>
 </body>
 </html>
