@@ -1,0 +1,30 @@
+<!-- answer.html -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>분석 결과</title>
+    <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>분석 결과</h1>
+        {% if results %}
+            <div class="results">
+                {% for result in results %}
+                    <div class="result-entry">
+                        <h2>작성자: {{ result.author or result.comment_author }}</h2>
+                        <p>제목: {{ result.title or 'N/A' }}</p>
+                        <p>내용: {{ result.content or result.comment_content }}</p>
+                        <p><strong>분석 결과:</strong> {{ result.analysis_result }}</p>
+                    </div>
+                    <hr>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p>전화번호를 포함한 게시물이 없습니다.</p>
+        {% endif %}
+    </div>
+</body>
+</html>

@@ -9,6 +9,7 @@
 <body>
     <div class="container">
         <h1>Articles</h1>
+        <button onclick="window.location.href='{{ url_for('question') }}'">인공지능을 통한 게시글 분석</button>
         <div id="articles-list" class="articles-list"></div>
     </div>
     <script src="{{ url_for('static', filename='articleScripts.js') }}"></script>

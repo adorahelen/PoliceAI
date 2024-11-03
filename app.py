@@ -1,10 +1,26 @@
 from flask import Flask, jsonify, render_template, request
+import requests
+from bs4 import BeautifulSoup
+
+
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from dotenv import load_dotenv
 import os
 import base64
+import logging
+import re
+
 
 app = Flask(__name__)
+
+# .env 파일에서 API 키 불러오기
+load_dotenv()
+API_KEY = os.getenv("OPENAI_API_KEY")
+
+# 로깅 설정 (콘솔에 에러 메시지를 출력)
+logging.basicConfig(level=logging.INFO)
+
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     f"mysql+pymysql://{os.environ.get('DB_USERNAME')}:{os.environ.get('DB_PASSWORD')}@"
     f"{os.environ.get('DB_HOST')}:{os.environ.get('DB_PORT')}/{os.environ.get('DB_NAME')}"
@@ -69,40 +85,126 @@ class InsertedFile(db.Model):
         }
 
 
-# User 모델
-class User(db.Model):
-    __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(100), nullable=False, unique=True)
-    nickname = db.Column(db.String(100), unique=True)
-    profile_image = db.Column(db.LargeBinary)
-    profile_url = db.Column(db.String(255))
-    role = db.Column(db.String(50))
 
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "email": self.email,
-            "nickname": self.nickname,
-            "profile_url": self.profile_url,
-            "role": self.role,
-            "profile_image": self.get_profile_image_as_base64()
+def contains_phone_number(text):
+    # HTML 태그 제거
+    soup = BeautifulSoup(text, "html.parser")
+    clean_text = soup.get_text()
+    clean_text = clean_text.replace("&nbsp;", " ")
+
+    # 전화번호 형식 검출 (다양한 형식 지원)
+    pattern = r"\b\d{2,3}-\d{3,4}-\d{4}\b"
+    return re.search(pattern, clean_text) is not None
+
+def check_phone_numbers(article):
+    try:
+        api_url = "https://api.openai.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "gpt-3.5-turbo",
+            "messages": [{"role": "user", "content": article['content']}]
         }
 
-    def get_profile_image_as_base64(self):
-        if self.profile_image:
-            return "data:image/png;base64," + base64.b64encode(self.profile_image).decode('utf-8')
-        return None
+        response = requests.post(api_url, headers=headers, json=payload)
+        response.raise_for_status()
+        reply = response.json()['choices'][0]['message']['content']
+
+        # 패턴 확인 로깅 추가
+        logging.info(f"API 응답 내용: {reply}")
+
+        phone_pattern = re.compile(r'\b\d{2,3}-\d{3,4}-\d{4}\b')
+        found_numbers = phone_pattern.findall(reply)
+
+        if found_numbers:
+            logging.info(f"전화번호 발견: {found_numbers} - 게시물 제목: {article['title']}")
+        else:
+            logging.info("전화번호가 발견되지 않았습니다.")
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"API 요청 오류: {e}")
+    except Exception as e:
+        logging.error(f"예상치 못한 오류: {e}")
+
+@app.route('/chat', methods=['POST'])
+def chat_with_gpt():
+    try:
+        # ChatGPT API URL과 헤더를 여기서 정의
+        api_url = "https://api.openai.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        articles = Article.query.all()
+        detected_entries = []
+
+        for article in articles:
+            if contains_phone_number(article.title) or contains_phone_number(article.content):
+                detected_entries.append({
+                    "title": article.title,
+                    "content": article.content,
+                    "author": article.author,
+                    "analysis_result": None
+                })
+                check_phone_numbers(article)  # 전화번호 확인 호출
+
+            for comment in article.comments:
+                if contains_phone_number(comment.comment_content):
+                    detected_entries.append({
+                        "comment_author": comment.comment_author,
+                        "comment_content": comment.comment_content,
+                        "analysis_result": None
+                    })
+                    check_phone_numbers(comment)  # 댓글에 대한 전화번호 확인 호출
+
+        # ChatGPT API를 통해 분석 요청
+        for entry in detected_entries:
+            content_text = entry.get("content") or entry.get("comment_content")
+            payload = {
+                "model": "gpt-3.5-turbo",
+                "messages": [
+                    {"role": "system", "content": "음란물 및 민감 정보 분석 시스템입니다."},
+                    {"role": "user", "content": f"분석할 텍스트: {content_text}"}
+                ]
+            }
+
+            response = requests.post(api_url, headers=headers, json=payload)
+            response.raise_for_status()
+
+            analysis_result = response.json()['choices'][0]['message']['content']
+            entry['analysis_result'] = analysis_result
+
+        return render_template('answer.html', results=detected_entries)
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"ChatGPT API request failed: {e}")
+        return jsonify({"error": "ChatGPT API 요청 실패"}), 500
+
+    except Exception as e:
+        logging.error(f"Server error: {e}")
+        return jsonify({"error": "서버에서 오류가 발생했습니다."}), 500
+
+
+
+
 
 # Routes
 @app.route('/')
 def home():
     return render_template('index.html')
 
-@app.route('/users', methods=['GET'])
-def user_home():
-    return render_template('user.html')
+@app.route('/question')
+def question():
+    return render_template('question.html')
+# 인공지능 프로젝트의 목적을 설명하고 버튼을 통해 인공지능 분석을 시작하는 페이지
 
+@app.route('/answer')
+def display_answer():
+    result = "AI 분석 결과를 표시할 내용입니다."  # 예시 데이터
+    return render_template('answer.html', result=result)
 
 @app.route('/api/articles', methods=['GET'])
 def get_articles():
@@ -113,13 +215,6 @@ def get_articles():
         print("Error fetching articles:", e)  # 콘솔에 에러 메시지 출력
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/users', methods=['GET'])
-def get_users():
-    try:
-        users = User.query.all()
-        return jsonify([user.to_dict() for user in users]), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/upload/file', methods=['GET'])
 def get_file():
