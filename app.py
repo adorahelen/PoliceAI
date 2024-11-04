@@ -1,7 +1,5 @@
 from flask import Flask, jsonify, render_template, request
 import requests
-from bs4 import BeautifulSoup
-
 
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -10,7 +8,6 @@ import os
 import base64
 import logging
 import re
-
 
 app = Flask(__name__)
 
@@ -85,111 +82,69 @@ class InsertedFile(db.Model):
         }
 
 
-
-def contains_phone_number(text):
-    # HTML 태그 제거
-    soup = BeautifulSoup(text, "html.parser")
-    clean_text = soup.get_text()
-    clean_text = clean_text.replace("&nbsp;", " ")
-
-    # 전화번호 형식 검출 (다양한 형식 지원)
-    pattern = r"\b\d{2,3}-\d{3,4}-\d{4}\b"
-    return re.search(pattern, clean_text) is not None
-
-def check_phone_numbers(article):
+# 게시글 중에서, 인공지능에 넣을 데이터만 별도 조회 (전처리 작업)
+@app.route('/api/articles/simple', methods=['GET'])
+def get_articles_simple():
     try:
-        api_url = "https://api.openai.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "gpt-3.5-turbo",
-            "messages": [{"role": "user", "content": article['content']}]
-        }
+        # 데이터베이스에서 모든 Article 객체를 조회합니다.
+        articles = Article.query.all()
 
-        response = requests.post(api_url, headers=headers, json=payload)
-        response.raise_for_status()
-        reply = response.json()['choices'][0]['message']['content']
+        # 각 게시글의 제목과 내용을 "Title: 제목, Content: 내용" 형식의 문자열로 변환 후 줄바꿈으로 연결합니다.
+        formatted_articles = "\n".join([f"Title: {article.title}, Content: {article.content}" for article in articles])
 
-        # 패턴 확인 로깅 추가
-        logging.info(f"API 응답 내용: {reply}")
+        # 변환된 문자열을 콘솔에 출력합니다.
+        print(formatted_articles)
 
-        phone_pattern = re.compile(r'\b\d{2,3}-\d{3,4}-\d{4}\b')
-        found_numbers = phone_pattern.findall(reply)
-
-        if found_numbers:
-            logging.info(f"전화번호 발견: {found_numbers} - 게시물 제목: {article['title']}")
-        else:
-            logging.info("전화번호가 발견되지 않았습니다.")
-
-    except requests.exceptions.RequestException as e:
-        logging.error(f"API 요청 오류: {e}")
+        # 가공된 데이터 `formatted_articles`를 JSON 형식으로 반환합니다.
+        return jsonify({"formatted_articles": formatted_articles}), 200
     except Exception as e:
-        logging.error(f"예상치 못한 오류: {e}")
+        # 오류 발생 시 에러 메시지를 콘솔에 출력하고 JSON 형식으로 반환합니다.
+        print("Error fetching articles:", e)
+        return jsonify({"error": str(e)}), 500
 
+
+# 조회된 데이터를 chatGPT(LLM) 활용하여 분석 (전처리 된 데이터 -> 모델 입력[학습 완료된] )
 @app.route('/chat', methods=['POST'])
 def chat_with_gpt():
     try:
-        # ChatGPT API URL과 헤더를 여기서 정의
+        # `get_articles_simple` 함수 호출해 게시글 데이터를 가져옵니다.
+        articles_response = get_articles_simple()
+
+        # `get_articles_simple`의 HTTP 상태 코드가 200(성공)이 아닌 경우 오류 메시지를 반환합니다.
+        if articles_response[1] != 200:
+            return jsonify({"error": "Articles could not be fetched"}), 500
+
+        # 정상적으로 가져온 경우 JSON 데이터에서 `formatted_articles` 키의 값을 추출합니다.
+        articles_content = articles_response[0].json["formatted_articles"]
+
+        # ChatGPT API 호출을 위한 URL과 헤더, 페이로드 설정
         api_url = "https://api.openai.com/v1/chat/completions"
         headers = {
-            "Authorization": f"Bearer {API_KEY}",
+            "Authorization": f"Bearer {API_KEY}",  # API 인증을 위해 `API_KEY` 사용
             "Content-Type": "application/json"
         }
 
-        articles = Article.query.all()
-        detected_entries = []
+        # ChatGPT에 전달할 메시지와 추가 질문 설정
+        user_input = f"{articles_content}\n\nHow many phone number patterns are detected in this data?"
+        payload = {
+            "model": "gpt-3.5-turbo",
+            "messages": [{"role": "user", "content": user_input}]
+        }
 
-        for article in articles:
-            if contains_phone_number(article.title) or contains_phone_number(article.content):
-                detected_entries.append({
-                    "title": article.title,
-                    "content": article.content,
-                    "author": article.author,
-                    "analysis_result": None
-                })
-                check_phone_numbers(article)  # 전화번호 확인 호출
+        # API에 POST 요청 보내기
+        response = requests.post(api_url, headers=headers, json=payload)
+        response.raise_for_status()  # 응답 상태가 오류인 경우 예외를 발생시킵니다.
 
-            for comment in article.comments:
-                if contains_phone_number(comment.comment_content):
-                    detected_entries.append({
-                        "comment_author": comment.comment_author,
-                        "comment_content": comment.comment_content,
-                        "analysis_result": None
-                    })
-                    check_phone_numbers(comment)  # 댓글에 대한 전화번호 확인 호출
+        # 응답에서 ChatGPT가 생성한 답변 내용 추출
+        reply = response.json()['choices'][0]['message']['content']
 
-        # ChatGPT API를 통해 분석 요청
-        for entry in detected_entries:
-            content_text = entry.get("content") or entry.get("comment_content")
-            payload = {
-                "model": "gpt-3.5-turbo",
-                "messages": [
-                    {"role": "system", "content": "음란물 및 민감 정보 분석 시스템입니다."},
-                    {"role": "user", "content": f"분석할 텍스트: {content_text}"}
-                ]
-            }
-
-            response = requests.post(api_url, headers=headers, json=payload)
-            response.raise_for_status()
-
-            analysis_result = response.json()['choices'][0]['message']['content']
-            entry['analysis_result'] = analysis_result
-
-        return render_template('answer.html', results=detected_entries)
-
-    except requests.exceptions.RequestException as e:
-        logging.error(f"ChatGPT API request failed: {e}")
-        return jsonify({"error": "ChatGPT API 요청 실패"}), 500
+        # ChatGPT의 답변을 JSON 형식으로 반환
+        return jsonify({"reply": reply})
 
     except Exception as e:
-        logging.error(f"Server error: {e}")
-        return jsonify({"error": "서버에서 오류가 발생했습니다."}), 500
-
-
-
-
+        # 오류 발생 시 콘솔에 에러 메시지를 출력하고 JSON 형식으로 반환
+        print("Error during GPT request:", e)
+        return jsonify({"error": str(e)}), 500
 
 # Routes
 @app.route('/')
@@ -199,12 +154,19 @@ def home():
 @app.route('/question')
 def question():
     return render_template('question.html')
-# 인공지능 프로젝트의 목적을 설명하고 버튼을 통해 인공지능 분석을 시작하는 페이지
+
 
 @app.route('/answer')
 def display_answer():
-    result = "AI 분석 결과를 표시할 내용입니다."  # 예시 데이터
+    # URL의 쿼리 파라미터에서 `result` 값을 가져옵니다.
+    # ex: http://127.0.0.1:5000/answer?result=There%20are%202%20phone%20number%20patterns%20detected%20in%20this%20data.
+    # 만약 `result` 값이 없으면 기본 값 "AI 분석 결과를 표시할 내용입니다."을 사용합니다.
+    result = request.args.get('result', "AI 분석 결과를 표시할 내용입니다.")
+
+    # `result` 값을 `answer.html` 템플릿으로 전달
     return render_template('answer.html', result=result)
+
+
 
 @app.route('/api/articles', methods=['GET'])
 def get_articles():

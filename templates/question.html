@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>인공지능 프로젝트</title>
+    <title>클린 웹 프로젝트</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
-        <h1>인공지능 프로젝트</h1>
-        <p>이 프로젝트는 딥페이크 탐지와 사이버 성폭력 예방을 목표로 하는 인공지능 기반 탐지 시스템입니다.</p>
-        <button id="start-analysis-btn" onclick="startAnalysis()">인공지능 분석 시작</button>
+        <h1>클린 웹  프로젝트</h1>
+        <button onclick="fetchChatGPTAnalysis()">분석 시작</button>
+        <p> 디지털 범죄 예방을 목표로 하는, 인공지능 기반 개인정보 보안 솔루션 시스템</p>
     </div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
