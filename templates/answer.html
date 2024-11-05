@@ -4,6 +4,70 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>분석 결과</title>
+    <style>
+        /* Basic resets and container styling */
+        body, html {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+            background-color: #f4f6f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            width: 80%;
+            max-width: 600px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            text-align: center;
+        }
+
+        /* Header styling */
+        h1 {
+            color: #333333;
+            font-size: 24px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+
+        /* Result message styling */
+        .results {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+
+        /* No results message styling */
+        .no-results {
+            color: #757575;
+            font-size: 16px;
+        }
+
+        /* Button styling */
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -13,8 +77,9 @@
                 <p><strong>AI 분석 결과:</strong> {{ result }}</p>
             </div>
         {% else %}
-            <p>전화번호를 포함한 게시물이 없습니다.</p>
+            <p class="no-results">전화번호를 포함한 게시물이 없습니다.</p>
         {% endif %}
+        <button onclick="window.location.href='/'">돌아가기</button>
     </div>
     <script src="static/script.js"></script>
 </body>
